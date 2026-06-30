@@ -668,7 +668,7 @@
   <span id="week-label">Caricamento...</span>
 </header>
 
-<div id="deadline-banner">📅 Le disponibilità vanno inserite entro <strong>giovedì ore 16:00</strong></div>
+<div id="deadline-banner">📅 Le disponibilità vanno inserite entro <strong>giovedì ore 15:00</strong></div>
 
 <div id="dropdowns-container"></div>
 
@@ -876,7 +876,7 @@
     const now = new Date();
     const giorno = now.getDay();
     const ora = now.getHours() + now.getMinutes() / 60;
-    return (giorno === 3 || (giorno === 4 && ora < 16));
+    return (giorno === 3 || (giorno === 4 && ora < 15));
   }
 
   async function setStato(s) {
