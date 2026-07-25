@@ -897,12 +897,7 @@
 
   async function setModalita(m) {
     try {
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: 'modalita', modalita: m })
-      });
+      await fetch(SCRIPT_URL + '?setModalita=' + m + '&t=' + Date.now());
       modalitaCorrente = m;
       aggiornaModalitaUI();
     } catch(e) {
@@ -928,12 +923,7 @@
 
   async function setStato(s) {
     try {
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: 'stato', stato: s })
-      });
+      await fetch(SCRIPT_URL + '?setStato=' + s + '&t=' + Date.now());
       statoCorrente = s;
       aggiornaStatoUI();
     } catch(e) {
