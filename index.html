@@ -971,11 +971,11 @@
     const NOMI = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
     const days = [];
     for (let d = 3; d <= 30; d++) {
-      const date = new Date(2026, 7, d); // agosto = mese 7 (0-indexed)
+      const date = new Date(2026, 7, d);
       const nome = NOMI[date.getDay()];
       const dd = String(d).padStart(2, '0');
       days.push({
-        key: `${nome} ${dd}/08`,
+        key: `${dd}/08`,
         display: `${nome} ${d} Agosto`
       });
     }
