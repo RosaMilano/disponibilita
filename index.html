@@ -955,16 +955,36 @@
     }
   }
 
-  function getNextWeekLabel() {
+  function getProssimaSettimana() {
     const now = new Date();
+    now.setHours(12, 0, 0, 0);
     const dayOfWeek = now.getDay();
     const daysUntilMonday = (dayOfWeek === 0) ? 1 : (8 - dayOfWeek);
     const nextMon = new Date(now);
     nextMon.setDate(now.getDate() + daysUntilMonday);
-    const nextSun = new Date(nextMon);
-    nextSun.setDate(nextMon.getDate() + 6);
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(nextMon);
+      d.setDate(nextMon.getDate() + i);
+      return d;
+    });
+  }
+
+  function formatDataISO(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function formatDataBreve(d) {
+    return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+  }
+
+  function getNextWeekLabel() {
+    const settimana = getProssimaSettimana();
     const fmt = (d) => d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
-    return `Settimana ${fmt(nextMon)} – ${fmt(nextSun)}`;
+    return `Settimana ${fmt(settimana[0])} – ${fmt(settimana[6])}`;
   }
 
   // ---- GIORNI AGOSTO ----
@@ -1116,7 +1136,13 @@
     if (modalitaCorrente === 'agosto') {
       giorniAttuali = buildAgostoDays();
     } else {
-      giorniAttuali = GIORNI.map((g, i) => ({ key: g, display: GIORNI_DISPLAY[i] }));
+      const settimana = getProssimaSettimana();
+      giorniAttuali = GIORNI.map((g, i) => ({
+        key: g,
+        data: formatDataISO(settimana[i]),
+        dataBreve: formatDataBreve(settimana[i]),
+        display: `${GIORNI_DISPLAY[i]} ${formatDataBreve(settimana[i])}`
+      }));
     }
 
     const grid = document.getElementById('giorni-grid');
@@ -1245,10 +1271,21 @@
     if (!almeno) { alert('Seleziona almeno un giorno disponibile.'); return; }
     if (erroreOrario) { alert("Controlla gli orari: per ogni giorno la fine deve essere successiva all'inizio."); return; }
 
+    const settimana = getProssimaSettimana();
+    const dateDisponibilita = {};
+    giorniAttuali.forEach((g) => {
+      if (disponibilita[g.key]) {
+        dateDisponibilita[g.data] = disponibilita[g.key];
+      }
+    });
+
     const entry = {
       nome,
       disponibilita,
-      modalita: modalitaCorrente,
+      dateDisponibilita,
+      settimana_inizio: formatDataISO(settimana[0]),
+      settimana_fine: formatDataISO(settimana[6]),
+      modalita: 'settimanale',
       timestamp: new Date().toLocaleString('it-IT')
     };
 
