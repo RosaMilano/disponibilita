@@ -751,17 +751,18 @@
     </div>
   </div>
 
-  <!-- Funzionamento automatico -->
+  <!-- Controllo apertura/chiusura -->
   <div class="deadline-control">
-    <span>Raccolta: <strong>Automatica settimanale</strong><br>
-      <span style="font-size:0.78rem;color:var(--text-muted);">Apre ogni mercoledi e chiude ogni giovedi alle 15:00.</span>
+    <span>Stato raccolta: <strong id="stato-label">—</strong><br>
+      <span style="font-size:0.78rem;color:var(--text-muted);">In automatico apre ogni mercoledì e chiude ogni giovedì alle 15:00.</span>
     </span>
-    <strong id="stato-label">—</strong>
+    <div class="toggle-switch">
+      <button class="toggle-btn" id="btn-apri" onclick="setStato('aperto')">Apri manualmente</button>
+      <button class="toggle-btn" id="btn-chiudi" onclick="setStato('chiuso')">Chiudi manualmente</button>
+      <button class="toggle-btn" id="btn-auto" onclick="setStato('auto')">Automatico</button>
+    </div>
   </div>
   <div id="modalita-label" style="display:none;">Settimanale</div>
-  <button id="btn-apri" style="display:none;"></button>
-  <button id="btn-chiudi" style="display:none;"></button>
-  <button id="btn-auto" style="display:none;"></button>
   <button id="btn-settimanale" style="display:none;"></button>
   <button id="btn-agosto" style="display:none;"></button>
 
@@ -879,9 +880,15 @@
 
   // ---- STATO + MODALITA (remoto via Google Script) ----
   async function fetchStato() {
-    // Funzionamento fisso: raccolta settimanale e finestra automatica.
-    // Lo stato remoto non puo piu lasciare accidentalmente il form aperto o chiuso.
-    statoCorrente = 'auto';
+    // Recupera dal Google Apps Script l'eventuale override manuale.
+    // La modalità resta sempre settimanale.
+    try {
+      const res = await fetch(SCRIPT_URL + '?t=' + Date.now());
+      const data = await res.json();
+      statoCorrente = ['aperto','chiuso','auto'].includes(data.stato) ? data.stato : 'auto';
+    } catch(e) {
+      statoCorrente = 'auto';
+    }
     modalitaCorrente = 'settimanale';
   }
 
@@ -903,8 +910,12 @@
   }
 
   function isFormApertoConStato(stato) {
-    // Apertura automatica: mercoledi 00:00 -> giovedi 14:59:59.
-    // Alle 15:00 di giovedi la raccolta viene chiusa.
+    // Gli override manuali hanno priorità sul calendario automatico.
+    if (stato === 'aperto') return true;
+    if (stato === 'chiuso') return false;
+
+    // Automatico: mercoledì 00:00 -> giovedì 14:59:59.
+    // Alle 15:00 di giovedì la raccolta viene chiusa.
     const now = new Date();
     const giorno = now.getDay();
     const ora = now.getHours() + now.getMinutes() / 60;
@@ -913,7 +924,7 @@
 
   async function setStato(s) {
     try {
-      await fetch(SCRIPT_URL + '?setStato=' + s + '&t=' + Date.now());
+      await fetch(SCRIPT_URL + '?setStato=' + encodeURIComponent(s) + '&t=' + Date.now());
       statoCorrente = s;
       aggiornaStatoUI();
     } catch(e) {
@@ -986,10 +997,37 @@
 
   let activeDropdown = null;
 
+  function timeToMinutes(orario) {
+    if (!orario) return null;
+    const [h, m] = orario.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  function filtraOrariFine(giornoIdx) {
+    const inizio = document.getElementById(`btn-${giornoIdx}-inizio`).dataset.value;
+    const dropFine = document.getElementById(`drop-${giornoIdx}-fine`);
+    if (!dropFine) return;
+
+    const minInizio = timeToMinutes(inizio);
+    dropFine.querySelectorAll('.time-option').forEach(o => {
+      const valido = minInizio !== null && timeToMinutes(o.dataset.time) > minInizio;
+      o.style.display = valido ? 'block' : 'none';
+    });
+  }
+
   function apriTimePicker(giornoIdx, tipo, btnEl) {
     if (activeDropdown) {
       activeDropdown.classList.remove('visible');
       activeDropdown = null;
+    }
+
+    if (tipo === 'fine') {
+      const inizio = document.getElementById(`btn-${giornoIdx}-inizio`).dataset.value;
+      if (!inizio) {
+        alert("Seleziona prima l'orario di inizio.");
+        return;
+      }
+      filtraOrariFine(giornoIdx);
     }
 
     const dropId = `drop-${giornoIdx}-${tipo}`;
@@ -1028,6 +1066,14 @@
   }
 
   function selezionaOrario(giornoIdx, tipo, valore) {
+    if (tipo === 'fine') {
+      const inizio = document.getElementById(`btn-${giornoIdx}-inizio`).dataset.value;
+      if (!inizio || timeToMinutes(valore) <= timeToMinutes(inizio)) {
+        alert("L'orario di fine deve essere successivo all'orario di inizio.");
+        return;
+      }
+    }
+
     const btnId = `btn-${giornoIdx}-${tipo}`;
     const btn = document.getElementById(btnId);
     btn.innerHTML = `${valore} <span style="font-size:0.7rem">▼</span>`;
@@ -1039,6 +1085,20 @@
     drop.querySelectorAll('.time-option').forEach(o => {
       o.classList.toggle('selected', o.dataset.time === valore);
     });
+
+    // Se cambia l'inizio e la fine già scelta non è più valida, azzera la fine.
+    if (tipo === 'inizio') {
+      const btnFine = document.getElementById(`btn-${giornoIdx}-fine`);
+      const fineAttuale = btnFine.dataset.value;
+      if (fineAttuale && timeToMinutes(fineAttuale) <= timeToMinutes(valore)) {
+        btnFine.dataset.value = '';
+        btnFine.classList.remove('selezionato');
+        btnFine.innerHTML = '<span class="placeholder">Ora fine</span> <span style="font-size:0.7rem">▼</span>';
+        const dropFine = document.getElementById(`drop-${giornoIdx}-fine`);
+        dropFine.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+      }
+      filtraOrariFine(giornoIdx);
+    }
 
     chiudiTimePicker();
   }
@@ -1150,9 +1210,12 @@
 
   // ---- INVIA ----
   async function inviaDisponibilita() {
+    // Aggiorna prima lo stato remoto: così un'apertura/chiusura manuale
+    // impostata dall'admin viene rispettata anche da una pagina già aperta.
+    await fetchStato();
+
     // Ricontrolla la finestra temporale anche al momento dell'invio.
-    // Impedisce invii dopo le 15:00 se la pagina e rimasta aperta.
-    if (!isFormApertoConStato('auto')) {
+    if (!isFormApertoConStato(statoCorrente)) {
       document.getElementById('form-screen').style.display = 'none';
       document.getElementById('closed-screen').style.display = 'flex';
       alert('La raccolta delle disponibilita e chiusa. Riapre mercoledi prossimo.');
@@ -1170,7 +1233,7 @@
       if (document.getElementById(`row-${i}`).classList.contains('attivo')) {
         const inizio = document.getElementById(`btn-${i}-inizio`).dataset.value;
         const fine = document.getElementById(`btn-${i}-fine`).dataset.value;
-        if (!inizio || !fine) {
+        if (!inizio || !fine || timeToMinutes(fine) <= timeToMinutes(inizio)) {
           erroreOrario = true;
         } else {
           disponibilita[g.key] = `DISP ${inizio} - ${fine}`;
@@ -1180,7 +1243,7 @@
     });
 
     if (!almeno) { alert('Seleziona almeno un giorno disponibile.'); return; }
-    if (erroreOrario) { alert('Inserisci orario di inizio e fine per tutti i giorni selezionati.'); return; }
+    if (erroreOrario) { alert("Controlla gli orari: per ogni giorno la fine deve essere successiva all'inizio."); return; }
 
     const entry = {
       nome,
@@ -1291,12 +1354,15 @@
   }
 
   // ---- CONTROLLO AUTOMATICO FINESTRA ----
-  function verificaFinestraTemporale() {
+  async function verificaFinestraTemporale() {
     const adminVisibile = document.getElementById('admin-panel').style.display === 'block';
     const successVisibile = document.getElementById('success-screen').style.display === 'flex';
     if (adminVisibile || successVisibile) return;
 
-    const aperto = isFormApertoConStato('auto');
+    // Rilegge periodicamente l'override remoto, così le modifiche manuali
+    // dell'admin arrivano anche ai dispositivi che hanno già il sito aperto.
+    await fetchStato();
+    const aperto = isFormApertoConStato(statoCorrente);
     if (aperto) {
       if (document.getElementById('form-screen').style.display !== 'block') {
         document.getElementById('closed-screen').style.display = 'none';
